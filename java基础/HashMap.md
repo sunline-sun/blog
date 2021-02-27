@@ -119,9 +119,9 @@ abstract class HashIterator {
 }
 ~~~
 #### 遍历步骤
-1.获取keySet对象，keySet中包含keyIterator迭代器，遍历时调用的就是他的next()方法
-2.keyIterator的next()方法里就是获取了它的父类HashIterator的nextKey()的key并返回
-3.HashIterator的nextKey()方法就是获取下一个不为空的桶并返回。
+1. 获取keySet对象，keySet中包含keyIterator迭代器，遍历时调用的就是他的next()方法
+2. keyIterator的next()方法里就是获取了它的父类HashIterator的nextKey()的key并返回
+3. HashIterator的nextKey()方法就是获取下一个不为空的桶并返回。
 
 ##### entrySet同理，只是entryIterator的next()方法返回了HashIterator的nextKey()返回的整个node节点，而不是只返回了key
 
