@@ -1,3 +1,5 @@
+![图片](https://user-images.githubusercontent.com/55612309/109374255-dc63a700-78ee-11eb-83e6-c28c5543c43d.png) 集合类父子关系图
+
 ### collection接口下的集合
 - List
    - ArrayList Object[]数组
@@ -14,5 +16,7 @@
 - LinkedHashMap 继承自HashMap，但是额外维护了一个双向链表，保证插入的顺序，通过对链表的操作，实现访问顺序。
 - HashTable 数组加链表的结构
 - TreeMap 红黑树（自平衡的排序二叉树）
+
+### 
 
 
