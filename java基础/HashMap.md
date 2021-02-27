@@ -38,7 +38,12 @@
 ```
 ### 遍历
 - 一般通过keySet()或者entrySet()方法遍历，这两种方式编译后就是用的各自迭代器方式
-~~~Java
+代码日下
+
+<details>
+<summary>源代码</summary>
+
+```java
 //keySet()遍历
   Set keys = map.keySet();
   for(String key : keys){
@@ -117,7 +122,9 @@ abstract class HashIterator {
     }
     //省略部分代码
 }
-~~~
+```
+</details>
+
 #### 遍历步骤
 1. 获取keySet对象，keySet中包含keyIterator迭代器，遍历时调用的就是他的next()方法
 2. keyIterator的next()方法里就是获取了它的父类HashIterator的nextKey()的key并返回
@@ -129,3 +136,4 @@ abstract class HashIterator {
 - 因为遍历是通过遍历数组结构返回的，插入的时候key经过哈希运算插入的位置是随机的，而不是有序的
 
 ### 插入
+
