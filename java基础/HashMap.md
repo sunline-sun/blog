@@ -48,7 +48,7 @@ final Node<K,V> getNode(int hash, Object key) {
     return null;
 }
  ```
- <details>
+ </details>
 
  #### 查询步骤
 - 找到键值对对应桶数组中的位置，判断当前hash是否和参数key的hash一致、key是否一致，如果一致，返回，不一致继续下一步
