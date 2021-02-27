@@ -15,11 +15,41 @@
 - 负载因子可以反映HashMap桶数组的使用情况，调低负载因子大小，HashMap容纳的键值对就会变少，扩容时，键与键之间的碰撞几率降低，链表变短，增删改查效率提升，也是就是空间换时间。调高负载因子，反之，就是时间换空间
 
 ### 查询
- ```Java
-    get(Object obj){
-      return (e = getNode(hash(key),key)) == null ? null : e.value;
-    } 
+<details>
+<summary>源代码</summary>
+ 
+  ```Java
+    public V get(Object key) {
+    Node<K,V> e;
+    return (e = getNode(hash(key), key)) == null ? null : e.value;
+}
+
+final Node<K,V> getNode(int hash, Object key) {
+    Node<K,V>[] tab; Node<K,V> first, e; int n; K k;
+    // 1. 定位键值对所在桶的位置
+    if ((tab = table) != null && (n = tab.length) > 0 &&
+        (first = tab[(n - 1) & hash]) != null) {
+        if (first.hash == hash && // always check first node
+            ((k = first.key) == key || (key != null && key.equals(k))))
+            return first;
+        if ((e = first.next) != null) {
+            // 2. 如果 first 是 TreeNode 类型，则调用黑红树查找方法
+            if (first instanceof TreeNode)
+                return ((TreeNode<K,V>)first).getTreeNode(hash, key);
+                
+            // 2. 对链表进行查找
+            do {
+                if (e.hash == hash &&
+                    ((k = e.key) == key || (key != null && key.equals(k))))
+                    return e;
+            } while ((e = e.next) != null);
+        }
+    }
+    return null;
+}
  ```
+ <details>
+
  #### 查询步骤
 - 找到键值对对应桶数组中的位置，判断当前hash是否和参数key的hash一致、key是否一致，如果一致，返回，不一致继续下一步
    - 通过与运算获取对应桶位置，tab[(n-1) & hash]，之所以这样计算是因为位运算比直接取余（hash%length）效率高
