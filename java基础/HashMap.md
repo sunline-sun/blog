@@ -36,3 +36,96 @@
      return key == null ? null : (h = key.hashCode()) ^ (h >>> 16)
    }
 ```
+### 遍历
+- 一般通过keySet()或者entrySet()方法遍历，这两种方式编译后就是用的各自迭代器方式
+~~~Java
+//keySet()遍历
+  Set keys = map.keySet();
+  for(String key : keys){
+    dosomething~
+  }
+  //迭代器遍历
+  Set keys = map.keySet();
+  Iterator it = keys.iterator();
+  while(it.hasnext()){
+   Object key = it.next();
+  }
+  public Set<K> keySet() {
+    Set<K> ks = keySet;
+    if (ks == null) {
+        ks = new KeySet();
+        keySet = ks;
+    }
+    return ks;
+}
+
+/**
+ * 键集合
+ */
+final class KeySet extends AbstractSet<K> {
+    public final int size()                 { return size; }
+    public final void clear()               { HashMap.this.clear(); }
+    public final Iterator<K> iterator()     { return new KeyIterator(); }
+    public final boolean contains(Object o) { return containsKey(o); }
+    public final boolean remove(Object key) {
+        return removeNode(hash(key), key, null, false, true) != null;
+    }
+    // 省略部分代码
+}
+
+/**
+ * 键迭代器
+ */
+final class KeyIterator extends HashIterator 
+    implements Iterator<K> {
+    public final K next() { return nextNode().key; }
+}
+
+abstract class HashIterator {
+    Node<K,V> next;        // next entry to return
+    Node<K,V> current;     // current entry
+    int expectedModCount;  // for fast-fail
+    int index;             // current slot
+
+    HashIterator() {
+        expectedModCount = modCount;
+        Node<K,V>[] t = table;
+        current = next = null;
+        index = 0;
+        if (t != null && size > 0) { // advance to first entry 
+            // 寻找第一个包含链表节点引用的桶
+            do {} while (index < t.length && (next = t[index++]) == null);
+        }
+    }
+
+    public final boolean hasNext() {
+        return next != null;
+    }
+
+    final Node<K,V> nextNode() {
+        Node<K,V>[] t;
+        Node<K,V> e = next;
+        if (modCount != expectedModCount)
+            throw new ConcurrentModificationException();
+        if (e == null)
+            throw new NoSuchElementException();
+        if ((next = (current = e).next) == null && (t = table) != null) {
+            // 寻找下一个包含链表节点引用的桶
+            do {} while (index < t.length && (next = t[index++]) == null);
+        }
+        return e;
+    }
+    //省略部分代码
+}
+~~~
+#### 遍历步骤
+1.获取keySet对象，keySet中包含keyIterator迭代器，遍历时调用的就是他的next()方法
+2.keyIterator的next()方法里就是获取了它的父类HashIterator的nextKey()的key并返回
+3.HashIterator的nextKey()方法就是获取下一个不为空的桶并返回。
+
+##### entrySet同理，只是entryIterator的next()方法返回了HashIterator的nextKey()返回的整个node节点，而不是只返回了key
+
+#### 为什么遍历结果和插入顺序不一致
+- 因为遍历是通过遍历数组结构返回的，插入的时候key经过哈希运算插入的位置是随机的，而不是有序的
+
+### 插入
