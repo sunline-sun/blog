@@ -167,4 +167,193 @@ abstract class HashIterator {
 
 ### 插入
 ##### table的初始化是在插入步骤执行的
+<details>
+<summary>源代码</summary>
 
+```java
+public V put(K key, V value) {
+    return putVal(hash(key), key, value, false, true);
+}
+
+final V putVal(int hash, K key, V value, boolean onlyIfAbsent,
+               boolean evict) {
+    Node<K,V>[] tab; Node<K,V> p; int n, i;
+    // 初始化桶数组 table，table 被延迟到插入新数据时再进行初始化
+    if ((tab = table) == null || (n = tab.length) == 0)
+        n = (tab = resize()).length;
+    // 如果桶中不包含键值对节点引用，则将新键值对节点的引用存入桶中即可
+    if ((p = tab[i = (n - 1) & hash]) == null)
+        tab[i] = newNode(hash, key, value, null);
+    else {
+        Node<K,V> e; K k;
+        // 如果键的值以及节点 hash 等于链表中的第一个键值对节点时，则将 e 指向该键值对
+        if (p.hash == hash &&
+            ((k = p.key) == key || (key != null && key.equals(k))))
+            e = p;
+            
+        // 如果桶中的引用类型为 TreeNode，则调用红黑树的插入方法
+        else if (p instanceof TreeNode)  
+            e = ((TreeNode<K,V>)p).putTreeVal(this, tab, hash, key, value);
+        else {
+            // 对链表进行遍历，并统计链表长度
+            for (int binCount = 0; ; ++binCount) {
+                // 链表中不包含要插入的键值对节点时，则将该节点接在链表的最后
+                if ((e = p.next) == null) {
+                    p.next = newNode(hash, key, value, null);
+                    // 如果链表长度大于或等于树化阈值，则进行树化操作
+                    if (binCount >= TREEIFY_THRESHOLD - 1) // -1 for 1st
+                        treeifyBin(tab, hash);
+                    break;
+                }
+                
+                // 条件为 true，表示当前链表包含要插入的键值对，终止遍历
+                if (e.hash == hash &&
+                    ((k = e.key) == key || (key != null && key.equals(k))))
+                    break;
+                p = e;
+            }
+        }
+        
+        // 判断要插入的键值对是否存在 HashMap 中
+        if (e != null) { // existing mapping for key
+            V oldValue = e.value;
+            // onlyIfAbsent 表示是否仅在 oldValue 为 null 的情况下更新键值对的值
+            if (!onlyIfAbsent || oldValue == null)
+                e.value = value;
+            afterNodeAccess(e);
+            return oldValue;
+        }
+    }
+    ++modCount;
+    // 键值对数量超过阈值时，则进行扩容
+    if (++size > threshold)
+        resize();
+    afterNodeInsertion(evict);
+    return null;
+}
+```
+</details>
+#### 插入核心逻辑
+- 当桶数组 table 为空时，通过扩容的方式初始化 table
+- 查找要插入的键值对是否已经存在，存在的话根据条件判断是否用新值替换旧值
+- 如果不存在，则将键值对链入链表中，并根据链表长度决定是否将链表转为红黑树
+- 判断键值对数量是否大于阈值，大于的话则进行扩容操作
+### 扩容机制
+#### 背景
+- 在 HashMap 中，桶数组的长度均是2的幂，阈值大小为桶数组长度与负载因子的乘积。当 HashMap 中的键值对数量超过阈值时，进行扩容。
+#### 扩容过程
+- HashMap 的扩容机制与其他变长集合的套路不太一样，HashMap 按当前桶数组长度的2倍进行扩容，阈值也变为原来的2倍（如果计算过程中，阈值溢出归零，则按阈值公式重新计算）。扩容之后，要重新计算键值对的位置，并把它们移动到合适的位置上去。
+#### 扩容源码
+<details>
+<summary>源代码</summary>
+
+```java
+final Node<K,V>[] resize() {
+    Node<K,V>[] oldTab = table;
+    int oldCap = (oldTab == null) ? 0 : oldTab.length;
+    int oldThr = threshold;
+    int newCap, newThr = 0;
+    // 如果 table 不为空，表明已经初始化过了
+    if (oldCap > 0) {
+        // 当 table 容量超过容量最大值，则不再扩容
+        if (oldCap >= MAXIMUM_CAPACITY) {
+            threshold = Integer.MAX_VALUE;
+            return oldTab;
+        } 
+        // 按旧容量和阈值的2倍计算新容量和阈值的大小
+        else if ((newCap = oldCap << 1) < MAXIMUM_CAPACITY &&
+                 oldCap >= DEFAULT_INITIAL_CAPACITY)
+            newThr = oldThr << 1; // double threshold
+    } else if (oldThr > 0) // initial capacity was placed in threshold
+        /*
+         * 初始化时，将 threshold 的值赋值给 newCap，
+         * HashMap 使用 threshold 变量暂时保存 initialCapacity 参数的值
+         */ 
+        newCap = oldThr;
+    else {               // zero initial threshold signifies using defaults
+        /*
+         * 调用无参构造方法时，桶数组容量为默认容量，
+         * 阈值为默认容量与默认负载因子乘积
+         */
+        newCap = DEFAULT_INITIAL_CAPACITY;
+        newThr = (int)(DEFAULT_LOAD_FACTOR * DEFAULT_INITIAL_CAPACITY);
+    }
+    
+    // newThr 为 0 时，按阈值计算公式进行计算
+    if (newThr == 0) {
+        float ft = (float)newCap * loadFactor;
+        newThr = (newCap < MAXIMUM_CAPACITY && ft < (float)MAXIMUM_CAPACITY ?
+                  (int)ft : Integer.MAX_VALUE);
+    }
+    threshold = newThr;
+    // 创建新的桶数组，桶数组的初始化也是在这里完成的
+    Node<K,V>[] newTab = (Node<K,V>[])new Node[newCap];
+    table = newTab;
+    if (oldTab != null) {
+        // 如果旧的桶数组不为空，则遍历桶数组，并将键值对映射到新的桶数组中
+        for (int j = 0; j < oldCap; ++j) {
+            Node<K,V> e;
+            if ((e = oldTab[j]) != null) {
+                oldTab[j] = null;
+                if (e.next == null)
+                    newTab[e.hash & (newCap - 1)] = e;
+                else if (e instanceof TreeNode)
+                    // 重新映射时，需要对红黑树进行拆分
+                    ((TreeNode<K,V>)e).split(this, newTab, j, oldCap);
+                else { // preserve order
+                    Node<K,V> loHead = null, loTail = null;
+                    Node<K,V> hiHead = null, hiTail = null;
+                    Node<K,V> next;
+                    // 遍历链表，并将链表节点按原顺序进行分组
+                    do {
+                        next = e.next;
+                        if ((e.hash & oldCap) == 0) {
+                            if (loTail == null)
+                                loHead = e;
+                            else
+                                loTail.next = e;
+                            loTail = e;
+                        }
+                        else {
+                            if (hiTail == null)
+                                hiHead = e;
+                            else
+                                hiTail.next = e;
+                            hiTail = e;
+                        }
+                    } while ((e = next) != null);
+                    // 将分组后的链表映射到新桶中
+                    if (loTail != null) {
+                        loTail.next = null;
+                        newTab[j] = loHead;
+                    }
+                    if (hiTail != null) {
+                        hiTail.next = null;
+                        newTab[j + oldCap] = hiHead;
+                    }
+                }
+            }
+        }
+    }
+    return newTab;
+}
+```
+</details>
+- 上述代码做了三件事：
+   - 计算新桶数组的容量 newCap 和新阈值 newThr
+   - 根据计算出的 newCap 创建新的桶数组，桶数组 table 也是在这里进行初始化的
+   - 将键值对节点重新映射到新的桶数组里。如果节点是 TreeNode 类型，则需要拆分红黑树。如果是普通节点，则节点按原顺序进行分组。
+- 源码分析（方法resize在初始化和扩容时都调用，所以第一步判断是扩容还是初始化）newCap（新数组大小），newThr（新阈值）
+   - oldCap > 0，表示数组已经扩容过。oldCap >= MAXIMUM_CAPACITY大于等于最大数组长度，则不扩容；否则按照原数组和原阈值的大小的2倍扩容
+   - oldThr > 0，表示HashMap的初始化，调用第二个或者第三个初始化函数，由于初始化时，用阈值大小暂时保存初始化数组的值，所以在此将阈值赋值给newCap
+   - 其他情况，表示调用的HashMap的无参构造函数，将默认的阈值和数组大小赋值给变量newCap，newThr
+   - 当newThr=0，按阈值公式计算
+   - 创建长度为newCap的桶数组
+   - 如果旧数组桶不为空，遍历数组桶中的数据，重新计算之后映射到新的桶中。
+   - 如果该节点只有一个节点，直接通过hash*(n-1)映射到新桶
+   - 如果该节点类型是红黑树，通过红黑树方法映射
+   - 如果该节点是链表类型，先通过节点上的key对长度取余，将数据分为=0和!=0两类，映射到新的桶中，顺序不会发生改变
+ JDK1.8的扩容速度高于JDK1.7，1.7为了键值对的均匀分布，在计算hash值时加入了随机种子，在扩容过程中，相关方法会根据容量判断是否需要生成新的随机种子，并重新计算所有节点的 hash。而在 JDK1.8 中，则通过引入红黑树替代了该种方式。从而避免了多次计算 hash 的操作，提高了扩容效率。
+
+
+   
