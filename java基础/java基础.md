@@ -35,10 +35,18 @@
 - 受检查异常：Java 代码在编译过程中，如果受检查异常没有被 catch/throw 处理的话，就没办法通过编译 。除了RuntimeException及其子类以外，其他的Exception类及其子类都属于受检查异常 。常见的受检查异常有： IO 相关的异常、ClassNotFoundException 、SQLException...。
 - 不受检查异常：Java 代码在编译过程中 ，我们即使不处理不受检查异常也可以正常通过编译。RuntimeException 及其子类都统称为非受检查异常，例如：NullPoin​terException、NumberFormatException（字符串转换为数字）、ArrayIndexOutOfBoundsException（数组越界）、ClassCastException（类型转换错误）、ArithmeticException（算术错误）等。
 
-### BIO,NIO,AIO 有什么区别?
-- BIO (Blocking I/O): 同步阻塞 I/O 模式，数据的读取写入必须阻塞在一个线程内等待其完成。在活动连接数不是特别高（小于单机 1000）的情况下，这种模型是比较不错的，可以让每一个连接专注于自己的 I/O 并且编程模型简单，也不用过多考虑系统的过载、限流等问题。线程池本身就是一个天然的漏斗，可以缓冲一些系统处理不了的连接或请求。但是，当面对十万甚至百万级连接的时候，传统的 BIO 模型是无能为力的。因此，我们需要一种更高效的 I/O 处理模型来应对更高的并发量。
-- NIO (Non-blocking/New I/O): NIO 是一种同步非阻塞的 I/O 模型，在 Java 1.4 中引入了 NIO 框架，对应 java.nio 包，提供了 Channel , Selector，Buffer 等抽象。NIO 中的 N 可以理解为 Non-blocking，不单纯是 New。它支持面向缓冲的，基于通道的 I/O 操作方法。 NIO 提供了与传统 BIO 模型中的 Socket 和 ServerSocket 相对应的 SocketChannel 和 ServerSocketChannel 两种不同的套接字通道实现,两种通道都支持阻塞和非阻塞两种模式。阻塞模式使用就像传统中的支持一样，比较简单，但是性能和可靠性都不好；非阻塞模式正好与之相反。对于低负载、低并发的应用程序，可以使用同步阻塞 I/O 来提升开发速率和更好的维护性；对于高负载、高并发的（网络）应用，应使用 NIO 的非阻塞模式来开发
-- AIO (Asynchronous I/O): AIO 也就是 NIO 2。在 Java 7 中引入了 NIO 的改进版 NIO 2,它是异步非阻塞的 IO 模型。异步 IO 是基于事件和回调机制实现的，也就是应用操作之后会直接返回，不会堵塞在那里，当后台处理完成，操作系统会通知相应的线程进行后续的操作。AIO 是异步 IO 的缩写，虽然 NIO 在网络操作中，提供了非阻塞的方法，但是 NIO 的 IO 行为还是同步的。对于 NIO 来说，我们的业务线程是在 IO 操作准备好时，得到通知，接着就由这个线程自行进行 IO 操作，IO 操作本身是同步的。查阅网上相关资料，我发现就目前来说 AIO 的应用还不是很广泛，Netty 之前也尝试使用过 AIO，不过又放弃了。
+### 常见的IO模型
+- 同步阻塞 I/O、同步非阻塞 I/O、I/O 多路复用、信号驱动 I/O 和异步 I/O
+- 
+- BIO (Blocking I/O): BIO 属于同步阻塞 IO 模型 。BIO是一个连接一个线程。同步阻塞 IO 模型中，应用程序发起 read 调用后，会一直阻塞，直到在内核把数据拷贝到用户空间。。![图片](https://user-images.githubusercontent.com/55612309/109654403-1eb21000-7b9d-11eb-8c32-30191ed63143.png)
+- NIO (Non-blocking/New I/O): NIO 是一种同步非阻塞的 I/O 模型，NIO是一个请求一个线程.同步非阻塞 IO 模型中，应用程序会一直发起 read 调用，等待数据从内核空间拷贝到用户空间的这段时间里，线程依然是阻塞的，直到在内核把数据拷贝到用户空间。![图片](https://user-images.githubusercontent.com/55612309/109656209-24105a00-7b9f-11eb-970d-e036c1b0d1b4.png)
+
+- I/O 多路复用，IO 多路复用模型中，线程首先发起 select 调用，询问内核数据是否准备就绪，等内核把数据准备好了，用户线程再发起 read 调用。read 调用的过程（数据从内核空间->用户空间）还是阻塞的。![图片](https://user-images.githubusercontent.com/55612309/109656190-1f4ba600-7b9f-11eb-8aca-db53d4d7eeb2.png)
+
+- AIO (Asynchronous I/O): AIO 也就是 NIO 2。AIO是一个有效请求一个线程。在 Java 7 中引入了 NIO 的改进版 NIO 2,它是异步非阻塞的 IO 模型。异步 IO 是基于事件和回调机制实现的，也就是应用操作之后会直接返回，不会堵塞在那里，当后台处理完成，操作系统会通知相应的线程进行后续的操作。![图片](https://user-images.githubusercontent.com/55612309/109656315-41ddbf00-7b9f-11eb-9b69-afd772970cb6.png)
+- ![图片](https://user-images.githubusercontent.com/55612309/109658477-98e49380-7ba1-11eb-820e-efa5e4bb21d3.png)
+
+
 
 ### Bigdicimal精度丢失
 ![图片](https://user-images.githubusercontent.com/55612309/109504153-2d81bf80-7ad6-11eb-8a91-f3fff6dda847.png)
