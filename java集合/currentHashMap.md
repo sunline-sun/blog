@@ -22,6 +22,7 @@
 <summary>源代码</summary>
    
   ```Java
+  
 @SuppressWarnings("unchecked")
 public ConcurrentHashMap(int initialCapacity,float loadFactor, int concurrencyLevel) {
     // 参数校验
@@ -61,7 +62,8 @@ public ConcurrentHashMap(int initialCapacity,float loadFactor, int concurrencyLe
     Segment<K,V>[] ss = (Segment<K,V>[])new Segment[ssize];
     UNSAFE.putOrderedObject(ss, SBASE, s0); // ordered write of segments[0]
     this.segments = ss;
-}
+   }
+
  ```
  
 </detail>
