@@ -268,8 +268,153 @@ private void rehash(HashEntry<K,V> node) {
 - 与运算获取对应key的存放位置
 - 遍历链表，判断hash和equel()是否相等，相等就返回
 
-
-
-
-
 ### java8
+#### 存储结构
+- 数组+链表/红黑树
+
+#### 初始化
+- 通过cas操作和sizeCTl变量的值来初始化的
+- 当sizeCtl<0的时候，说明其他线程在执行初始化了，此时调用Thread.yield()让出CPU资源
+- 当sizeCtl不小于时候，通过cas操作将sizeCtl改为-1
+- 初始化数组
+
+<details>
+<summary>源代码</summary>
+   
+   ```java
+   /**
+ * Initializes table, using the size recorded in sizeCtl.
+ */
+private final Node<K,V>[] initTable() {
+    Node<K,V>[] tab; int sc;
+    while ((tab = table) == null || tab.length == 0) {
+        ／／　如果 sizeCtl < 0 ,说明另外的线程执行CAS 成功，正在进行初始化。
+        if ((sc = sizeCtl) < 0)
+            // 让出 CPU 使用权
+            Thread.yield(); // lost initialization race; just spin
+        else if (U.compareAndSwapInt(this, SIZECTL, sc, -1)) {
+            try {
+                if ((tab = table) == null || tab.length == 0) {
+                    int n = (sc > 0) ? sc : DEFAULT_CAPACITY;
+                    @SuppressWarnings("unchecked")
+                    Node<K,V>[] nt = (Node<K,V>[])new Node<?,?>[n];
+                    table = tab = nt;
+                    sc = n - (n >>> 2);
+                }
+            } finally {
+                sizeCtl = sc;
+            }
+            break;
+        }
+    }
+    return tab;
+}
+   ```
+   
+</details>
+
+#### sizeCtl值
+- -1时候代表有线程正在初始化
+- -N表示有N-1个线程在进行扩容
+- 表示初始化大小，没有初始化的时候
+- 表示实际容量，在初始化之后
+
+### put
+- 通过key计算hash值
+- 判断是否需要初始化，需要的话走初始化流程
+- 通过与运算找到插入位置，判断插入位置是否为空，如果为空，通过CAS操作插入Node节点，插入成功后直接break
+- 判断是否需要扩容，通过Node的hash值判断，等于-1代表需要扩容
+- 对这个桶加synized锁
+- 如果是链表，循环链表，判断是否相等，相等则覆盖，循环结束不相等把新节点插入尾部，最后判断长度是否超过8，超过的话转为红黑树
+- 如果是红黑树，调用红黑树插入逻辑
+
+<details>
+<summary>源代码</summary>
+   
+   ```java
+   public V put(K key, V value) {
+    return putVal(key, value, false);
+}
+
+/** Implementation for put and putIfAbsent */
+final V putVal(K key, V value, boolean onlyIfAbsent) {
+    // key 和 value 不能为空
+    if (key == null || value == null) throw new NullPointerException();
+    int hash = spread(key.hashCode());
+    int binCount = 0;
+    for (Node<K,V>[] tab = table;;) {
+        // f = 目标位置元素
+        Node<K,V> f; int n, i, fh;// fh 后面存放目标位置的元素 hash 值
+        if (tab == null || (n = tab.length) == 0)
+            // 数组桶为空，初始化数组桶（自旋+CAS)
+            tab = initTable();
+        else if ((f = tabAt(tab, i = (n - 1) & hash)) == null) {
+            // 桶内为空，CAS 放入，不加锁，成功了就直接 break 跳出
+            if (casTabAt(tab, i, null,new Node<K,V>(hash, key, value, null)))
+                break;  // no lock when adding to empty bin
+        }
+        else if ((fh = f.hash) == MOVED)
+            tab = helpTransfer(tab, f);
+        else {
+            V oldVal = null;
+            // 使用 synchronized 加锁加入节点
+            synchronized (f) {
+                if (tabAt(tab, i) == f) {
+                    // 说明是链表
+                    if (fh >= 0) {
+                        binCount = 1;
+                        // 循环加入新的或者覆盖节点
+                        for (Node<K,V> e = f;; ++binCount) {
+                            K ek;
+                            if (e.hash == hash &&
+                                ((ek = e.key) == key ||
+                                 (ek != null && key.equals(ek)))) {
+                                oldVal = e.val;
+                                if (!onlyIfAbsent)
+                                    e.val = value;
+                                break;
+                            }
+                            Node<K,V> pred = e;
+                            if ((e = e.next) == null) {
+                                pred.next = new Node<K,V>(hash, key,
+                                                          value, null);
+                                break;
+                            }
+                        }
+                    }
+                    else if (f instanceof TreeBin) {
+                        // 红黑树
+                        Node<K,V> p;
+                        binCount = 2;
+                        if ((p = ((TreeBin<K,V>)f).putTreeVal(hash, key,
+                                                       value)) != null) {
+                            oldVal = p.val;
+                            if (!onlyIfAbsent)
+                                p.val = value;
+                        }
+                    }
+                }
+            }
+            if (binCount != 0) {
+                if (binCount >= TREEIFY_THRESHOLD)
+                    treeifyBin(tab, i);
+                if (oldVal != null)
+                    return oldVal;
+                break;
+            }
+        }
+    }
+    addCount(1L, binCount);
+    return null;
+}
+   ```
+   
+</details>
+ 
+### get
+- 通过hash与运算找到位置
+- 如果对应位置有数据，判断头节点hash和值是否相等，相等就直接返回
+- 如果节点hash值是-1，代表这个桶是红黑树结构或者正在扩容，调用find()方法查找
+- 如果是链表，遍历链表，判断hash和key的值是否相等，有相等的返回
+- 都不符合返回null
+ 
