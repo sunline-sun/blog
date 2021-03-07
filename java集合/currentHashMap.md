@@ -65,8 +65,7 @@ public ConcurrentHashMap(int initialCapacity,float loadFactor, int concurrencyLe
    }
 
  ```
- 
-</detail>
+</details>
 
 
 #### put
@@ -190,7 +189,7 @@ final V put(K key, int hash, V value, boolean onlyIfAbsent) {
     return oldValue;
 }
  ```
-</detail>
+</details>
 
 
 ####  扩容
@@ -263,7 +262,7 @@ private void rehash(HashEntry<K,V> node) {
     table = newTable;
 }
  ```
-</detail>
+</details>
 
 ### get
 - 与运算获取对应key的存放位置
