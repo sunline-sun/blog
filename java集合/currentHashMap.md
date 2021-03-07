@@ -11,6 +11,14 @@
 - new CurrentHashMap(int initialCapacity,float loadFactor, int concurrencyLevel),参数是容量大小（默认16），负载因子（默认0.75），并发级别（默认16）
 
 #### 初始化逻辑
+- 参数校验
+- 校验并发级别大小，如果大于最大值，重置为最大值，默认为16
+- 寻找并发级别以上最小的2次幂，当做初始容量，默认为16
+- 记录segmentShift偏移量，用作后面寻找位置，大小为log2容量，比如容量16，他就是4，所以偏移量是32-4=28
+- 记录segmentMark，默认是ssize -1 = 16-1=15
+- 初始化segment[0],默认大小为2，负载因子为0.75，扩容阈值为1.5，插入第二个值的时候会触发扩容逻辑
+
+
 <details>
 <summary>源代码</summary>
    
@@ -58,14 +66,20 @@ public ConcurrentHashMap(int initialCapacity,float loadFactor, int concurrencyLe
  ```
 </detail>
 
-- 参数校验
-- 校验并发级别大小，如果大于最大值，重置为最大值，默认为16
-- 寻找并发级别以上最小的2次幂，当做初始容量，默认为16
-- 记录segmentShift偏移量，用作后面寻找位置，大小为log2容量，比如容量16，他就是4，所以偏移量是32-4=28
-- 记录segmentMark，默认是ssize -1 = 16-1=15
-- 初始化segment[0],默认大小为2，负载因子为0.75，扩容阈值为1.5，插入第二个值的时候会触发扩容逻辑
-
 #### put
+- 计算要put的位置，计算过程是通过key的hash值右移28位（偏移量大小），然后与segmentMark做与运算
+- 如果当前位置的segment为空，那么需要进行segment的初始化，因为第一次初始化的时候只会初始化第一个segment
+  - 初始化过程：再次判断segment是否为空（因为此时可能有其他线程初始化过了）
+  - 为null继续初始化，通过segment[0]的容量和负载因子创建HashEntry数组
+  - 再次检查segment是否为null
+  - 使用创建的HashEntry数组初始化segment
+  - 自旋判断segment是否为空，不为空把当前位置赋值为segment（整个segment的初始化过程是通过CAS解决的并发问题）
+- Segment.put插入key、value
+  - 因为Segment实现了ReenTranLock接口，所以直接tryLock()获取锁，获取不到就重试获取
+  - 获取到锁之后计算对应的index位置，获取这个位置的HashEntry
+    - 如果HashEntry不存在，判断当前容量是否超过扩容阈值，超过进行扩容，不超过直接头插法插入
+    - 如果HashEntry存在，循环链表，判断和要插入的值是否一致，一致则替换，循环之后没有，判断是否需要扩容，不需要直接头插
+
 <details>
 <summary>源代码</summary>
    
@@ -175,20 +189,17 @@ final V put(K key, int hash, V value, boolean onlyIfAbsent) {
  ```
 </detail>
 
-- 计算要put的位置，计算过程是通过key的hash值右移28位（偏移量大小），然后与segmentMark做与运算
-- 如果当前位置的segment为空，那么需要进行segment的初始化，因为第一次初始化的时候只会初始化第一个segment
-  - 初始化过程：再次判断segment是否为空（因为此时可能有其他线程初始化过了）
-  - 为null继续初始化，通过segment[0]的容量和负载因子创建HashEntry数组
-  - 再次检查segment是否为null
-  - 使用创建的HashEntry数组初始化segment
-  - 自旋判断segment是否为空，不为空把当前位置赋值为segment（整个segment的初始化过程是通过CAS解决的并发问题）
-- Segment.put插入key、value
-  - 因为Segment实现了ReenTranLock接口，所以直接tryLock()获取锁，获取不到就重试获取
-  - 获取到锁之后计算对应的index位置，获取这个位置的HashEntry
-    - 如果HashEntry不存在，判断当前容量是否超过扩容阈值，超过进行扩容，不超过直接头插法插入
-    - 如果HashEntry存在，循环链表，判断和要插入的值是否一致，一致则替换，循环之后没有，判断是否需要扩容，不需要直接头插
 
 ####  扩容
+- 扩容逻辑和hashmap在Java7的时候基本一致
+- 初始化变量，算出新的容量、阈值
+- 根据变量创建新的数据
+- 把旧数组的数据复制到新数组
+  - 遍历老数组，如果节点不为空，通过与运算判断在新数组的位置
+  - 在判断是链表还是只是一个元素，是一个元素直接插入新数组，是链表的话先循环链表
+  - 获取到某个节点后所有位置不变（这一步是为了优化插入逻辑）,然后把这个节点挂在新数组上
+  - 把这个节点前的链表继续循环，头插法插入
+
 <details>
 <summary>源代码</summary>
    
@@ -250,15 +261,6 @@ private void rehash(HashEntry<K,V> node) {
 }
  ```
 </detail>
-
-- 扩容逻辑和hashmap在Java7的时候基本一致
-- 初始化变量，算出新的容量、阈值
-- 根据变量创建新的数据
-- 把旧数组的数据复制到新数组
-  - 遍历老数组，如果节点不为空，通过与运算判断在新数组的位置
-  - 在判断是链表还是只是一个元素，是一个元素直接插入新数组，是链表的话先循环链表
-  - 获取到某个节点后所有位置不变（这一步是为了优化插入逻辑）,然后把这个节点挂在新数组上
-  - 把这个节点前的链表继续循环，头插法插入
 
 ### get
 - 与运算获取对应key的存放位置
