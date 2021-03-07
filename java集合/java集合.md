@@ -54,6 +54,9 @@
 #### 1.8后数据丢失原因
 - 两个线程put数据，因为put逻辑是先通过与运算找到位置，然后通过hash值判断是否有值，如果这个校验两个线程同时通过，就会出现数据覆盖的问题了
 
-### 
+### currentHashMap和hashTable区别
+- 底层实现：currentHashMap引入了红黑树结构，HashMap没有
+- 线程安全实现方式不同：currentHashMap在Java8之前是分段锁，Segment+HashEntry，Segment实现了Reetranlock，是可重入锁，结构是数组+链表，加锁的时候就是对Segment加锁，Java8后直接链表/红黑树首节点加锁，用synchronized和cas实现，这样只要hash不冲突就不会有并发问题，HashMap是整个map加一个锁，效率低下
+
 
 
