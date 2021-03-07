@@ -18,7 +18,6 @@
 - 记录segmentMark，默认是ssize -1 = 16-1=15
 - 初始化segment[0],默认大小为2，负载因子为0.75，扩容阈值为1.5，插入第二个值的时候会触发扩容逻辑
 
-
 <details>
 <summary>源代码</summary>
    
@@ -65,6 +64,7 @@ public ConcurrentHashMap(int initialCapacity,float loadFactor, int concurrencyLe
 }
  ```
 </detail>
+
 
 #### put
 - 计算要put的位置，计算过程是通过key的hash值右移28位（偏移量大小），然后与segmentMark做与运算
@@ -188,6 +188,7 @@ final V put(K key, int hash, V value, boolean onlyIfAbsent) {
 }
  ```
 </detail>
+
 
 
 ####  扩容
