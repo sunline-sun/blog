@@ -38,3 +38,10 @@
 - 重量级锁状态
 30bit 	2bit
 指向互斥量(重量级锁)的指针 	10
+
+### Synchronized和ReenTranLock的区别和相同点
+- 两者都是可重入锁，可重入锁就是同一个线程已经获取了锁对象，这个线程再次获取的时候，还是可以获取到的，但是锁的计数器自增1，只有计数器到0的时候，才会释放锁
+- synchronized依赖JVM，ReenTranlock依赖api，需要配合lock/unlock来加锁、释放锁
+- ReenTranLock具备等待可中断机制，lock.lockInterruptibly()来实现，就是正在等待的线程可以放弃等待去做其他的事情
+- ReenTranLock可以实现非公平锁和公平锁，Synchronized只能实现非公平锁，公平锁就是先等待的线程先获取锁，ReenTranLock通过new Reentranlock(boolean fair)指定实现公平锁还是非公平锁
+- Reantranlock可以实现选择性通知，类似于Synchronized的notify/notifyAll功能，区别是ReanTranlock可以对多个线程通知，因为Reantranlock可以在一个锁对象上创建多个Condition实例（对象监视器），不同线程可以注册在不同的Condition上，从而实现选择性通知，而synchronized一个锁对象只有一个对象监视器，所有的线程都注册在上面，只能全部通知或者随机通知一个。
