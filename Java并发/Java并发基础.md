@@ -86,3 +86,6 @@
 - LoadStore 屏障：对于这样的语句Load1， LoadStore，Store2，在Store2及后续写入操作被刷出前，保证Load1要读取的数据被读取完毕。
 - StoreLoad 屏障：对于这样的语句Store1， StoreLoad，Load2，在Load2及后续所有读取操作执行前，保证Store1的写入对所有处理器可见。
 
+### volitale和synchronized的区别
+- volitale只可以保证数据的可见性和有序性，不能保证原子性，synchronized可以保证可见性和原子性
+
