@@ -24,4 +24,106 @@
 - 通过与运算获取数组中的位置，key.threadLocalHashCode & (len-1)，ThreadLocalMap中计算hash的方式是采用斐波那契数当做计算因子，每新增一个ThreadLocal，hash值就会增加斐波那契数大小，通过这个来保证在散列数组中的均匀分布
 - 判断这个位置是否有值，没有就插入，有的话判断key是否相等，相等的话覆盖数据，然后返回
 - 否则会向后查找，直到找到一个为空的位置，然后插入（这个和HashMap是有区别的，因为没有链表结构）
-- 向后查找的过程发现这个Entry的key为null（GC回收了），这时候会替换过期的数据，
+- 向后查找的过程发现这个Entry的key为null（GC回收了），这时候会执行replaceStaleEntry()方法，进行替换过期数据
+- 向后查找过程中发现key相等的位置，会直接替换（出现这种情况是因为hash冲突的解决方式是向后查找，所以hash一样的数据下标位置不一定一样）
+- 如果是没有通过查找而是直接插入的走下面的逻辑
+- size++
+- 调用cleanSomeslots()做一起启发性清理 
+- 如果没有清理任何数据并且size超过了阈值（数组长度的三分之二），或进行扩容rehash()操作
+- rehash()方法里会再一次探测式清理过期key，完成后如果size>=threshold-threshold/4，则进行真正的扩容
+
+<details>
+  <summary>源代码</summary>
+  
+  ```java
+  private void set(ThreadLocal<?> key, Object value) {
+    Entry[] tab = table;
+    int len = tab.length;
+    int i = key.threadLocalHashCode & (len-1);
+
+    for (Entry e = tab[i];
+         e != null;
+         e = tab[i = nextIndex(i, len)]) {
+        `ThreadLocal`<?> k = e.get();
+
+        if (k == key) {
+            e.value = value;
+            return;
+        }
+
+        if (k == null) {
+            replaceStaleEntry(key, value, i);
+            return;
+        }
+    }
+
+    tab[i] = new Entry(key, value);
+    int sz = ++size;
+    if (!cleanSomeSlots(i, sz) && sz >= threshold)
+        rehash();
+}
+  ```
+ 
+  </details>
+
+### relaceStaleEntry()方法，替换过期数据，使用了探测式数据清理
+- 把slotToExpunge赋值当前节点下标，然后当前节点开始向前迭代查找，找其他过期的数据，找到了就更新slotToExpunge的值，知道碰到entry为null为止
+- 然后从当前节点开始向后迭代查找，
+  - 如果找到key相等的entry元素，下标为i，则交换两个元素，目的是把这个元素放到hash确定的下标位置，优化结构
+    - 判断slotToexpunge和staleSlot的值是否相等，相等则代表没有找到过期数据，把slotToExpunge赋值为i
+    - 进行启发式清理，从slotToExpunge开始
+- 如果向后找查找时候没有找到相等的key，创建一个新的Entry对象，替换当前的节点（因为当前节点是过期数据）
+- 判断slotToExpunge不等于当前节点，进行启发式清理
+
+
+<details>
+  <summary>源代码</summary>
+  
+  ```java
+  private void replaceStaleEntry(ThreadLocal<?> key, Object value,
+                                       int staleSlot) {
+    Entry[] tab = table;
+    int len = tab.length;
+    Entry e;
+
+    int slotToExpunge = staleSlot;
+    for (int i = prevIndex(staleSlot, len);
+         (e = tab[i]) != null;
+         i = prevIndex(i, len))
+
+        if (e.get() == null)
+            slotToExpunge = i;
+
+    for (int i = nextIndex(staleSlot, len);
+         (e = tab[i]) != null;
+         i = nextIndex(i, len)) {
+
+        `ThreadLocal`<?> k = e.get();
+
+        if (k == key) {
+            e.value = value;
+
+            tab[i] = tab[staleSlot];
+            tab[staleSlot] = e;
+
+            if (slotToExpunge == staleSlot)
+                slotToExpunge = i;
+            cleanSomeSlots(expungeStaleEntry(slotToExpunge), len);
+            return;
+        }
+
+        if (k == null && slotToExpunge == staleSlot)
+            slotToExpunge = i;
+    }
+
+    tab[staleSlot].value = null;
+    tab[staleSlot] = new Entry(key, value);
+
+    if (slotToExpunge != staleSlot)
+        cleanSomeSlots(expungeStaleEntry(slotToExpunge), len);
+}
+  ```
+  
+  </details>
+  
+ ### 
