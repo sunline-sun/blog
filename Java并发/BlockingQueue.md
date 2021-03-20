@@ -345,28 +345,206 @@ Object awaitFulfill(QNode s, Object e, boolean timed, long nanos) {
 #### PriorityBlockingQueue 扩容步骤
 - 先释放队列的锁，这样就可以读写操作和扩容并发做了，提高并发量
 - 获取扩容的锁，其实就是CAS操作获取锁
+- 创建新数组
+  - 判断节点个数，如果小于64，新数组大小 = 旧的数组大小 + 2
+  - 如果大于64，新数组大小增加旧数组大小一半
+  - 如果新数组大小大于最大值（Integer.MAX_VALUE），那么重新设置新数组大小为旧数组大小+1，如果还是大于最大值，抛出异常，不能扩容了
+  - 如果此时没有其他线程扩容了（因为扩容没有加锁，多线程下可能同时进扩容逻辑），那么创建新数组
+- 释放扩容锁
+- 获取队列锁
+- 把旧数组的数据转移到新数组中
   
   <details>
   <summary> 源代码</summary>
   
   ```java
   
+  private void tryGrow(Object[] array, int oldCap) {
+    // 这边做了释放锁的操作
+    lock.unlock(); // must release and then re-acquire main lock
+    Object[] newArray = null;
+    // 用 CAS 操作将 allocationSpinLock 由 0 变为 1，也算是获取锁
+    if (allocationSpinLock == 0 &&
+        UNSAFE.compareAndSwapInt(this, allocationSpinLockOffset,
+                                 0, 1)) {
+        try {
+            // 如果节点个数小于 64，那么增加的 oldCap + 2 的容量
+            // 如果节点数大于等于 64，那么增加 oldCap 的一半
+            // 所以节点数较小时，增长得快一些
+            int newCap = oldCap + ((oldCap < 64) ?
+                                   (oldCap + 2) :
+                                   (oldCap >> 1));
+            // 这里有可能溢出
+            if (newCap - MAX_ARRAY_SIZE > 0) {    // possible overflow
+                int minCap = oldCap + 1;
+                if (minCap < 0 || minCap > MAX_ARRAY_SIZE)
+                    throw new OutOfMemoryError();
+                newCap = MAX_ARRAY_SIZE;
+            }
+            // 如果 queue != array，那么说明有其他线程给 queue 分配了其他的空间
+            if (newCap > oldCap && queue == array)
+                // 分配一个新的大数组
+                newArray = new Object[newCap];
+        } finally {
+            // 重置，也就是释放锁
+            allocationSpinLock = 0;
+        }
+    }
+    // 如果有其他的线程也在做扩容的操作
+    if (newArray == null) // back off if another thread is allocating
+        Thread.yield();
+    // 重新获取锁
+    lock.lock();
+    // 将原来数组中的元素复制到新分配的大数组中
+    if (newArray != null && queue == array) {
+        queue = newArray;
+        System.arraycopy(array, 0, newArray, 0, oldCap);
+    }
+  }
+
   ```
+  
   </details>
+  
+  #### PriorityBlockingQueue put方法步骤
+  - 获取到锁
+  - 判断当前队列的元素数量是否大于等于数组的大小，是的话就需要调用扩容方法
+  - 把节点添加到二叉堆中，此时如果有传自己的比较器，就用自己的，没有就用默认的
+    - 插入二叉堆就是比较和父节点的大小，如果比父节点小，交换他们，继续和上个父节点比较
+  - 更新size大小
+  - 唤醒等待的读线程
+  - 释放锁
   
     <details>
   <summary> 源代码</summary>
   
   ```java
   
+  public void put(E e) {
+    // 直接调用 offer 方法，因为前面我们也说了，在这里，put 方法不会阻塞
+    offer(e); 
+  }
+  public boolean offer(E e) {
+    if (e == null)
+        throw new NullPointerException();
+    final ReentrantLock lock = this.lock;
+    // 首先获取到独占锁
+    lock.lock();
+    int n, cap;
+    Object[] array;
+    // 如果当前队列中的元素个数 >= 数组的大小，那么需要扩容了
+    while ((n = size) >= (cap = (array = queue).length))
+        tryGrow(array, cap);
+    try {
+        Comparator<? super E> cmp = comparator;
+        // 节点添加到二叉堆中
+        if (cmp == null)
+            siftUpComparable(n, e, array);
+        else
+            siftUpUsingComparator(n, e, array, cmp);
+        // 更新 size
+        size = n + 1;
+        // 唤醒等待的读线程
+        notEmpty.signal();
+    } finally {
+        lock.unlock();
+    }
+    return true;
+  }
+  
+  // 这个方法就是将数据 x 插入到数组 array 的位置 k 处，然后再调整树
+  private static <T> void siftUpComparable(int k, T x, Object[] array) {
+    Comparable<? super T> key = (Comparable<? super T>) x;
+    while (k > 0) {
+        // 二叉堆中 a[k] 节点的父节点位置
+        int parent = (k - 1) >>> 1;
+        Object e = array[parent];
+        if (key.compareTo((T) e) >= 0)
+            break;
+        array[k] = e;
+        k = parent;
+    }
+    array[k] = key;
+  }
+
   ```
   </details>
+  
+  #### PriorityBlockingQueue take()获取方法
+  - 获取独占锁
+  - 获取队列中的队头，如果是空的，就挂起线程，如果有数据，返回
+  - 释放锁
   
     <details>
   <summary> 源代码</summary>
   
   ```java
-  
+  public E take() throws InterruptedException {
+    final ReentrantLock lock = this.lock;
+    // 独占锁
+    lock.lockInterruptibly();
+    E result;
+    try {
+        // dequeue 出队
+        while ( (result = dequeue()) == null)
+            notEmpty.await();
+    } finally {
+        lock.unlock();
+    }
+    return result;
+  }
+  private E dequeue() {
+    int n = size - 1;
+    if (n < 0)
+        return null;
+    else {
+        Object[] array = queue;
+        // 队头，用于返回
+        E result = (E) array[0];
+        // 队尾元素先取出
+        E x = (E) array[n];
+        // 队尾置空
+        array[n] = null;
+        Comparator<? super E> cmp = comparator;
+        if (cmp == null)
+            siftDownComparable(0, x, array, n);
+        else
+            siftDownUsingComparator(0, x, array, n, cmp);
+        size = n;
+        return result;
+    }
+  }
+  private static <T> void siftDownComparable(int k, T x, Object[] array,
+                                           int n) {
+    if (n > 0) {
+        Comparable<? super T> key = (Comparable<? super T>)x;
+        // 这里得到的 half 肯定是非叶节点
+        // a[n] 是最后一个元素，其父节点是 a[(n-1)/2]。所以 n >>> 1 代表的节点肯定不是叶子节点
+        // 下面，我们结合图来一行行分析，这样比较直观简单
+        // 此时 k 为 0, x 为 17，n 为 9
+        int half = n >>> 1; // 得到 half = 4
+        while (k < half) {
+            // 先取左子节点
+            int child = (k << 1) + 1; // 得到 child = 1
+            Object c = array[child];  // c = 12
+            int right = child + 1;  // right = 2
+            // 如果右子节点存在，而且比左子节点小
+            // 此时 array[right] = 20，所以条件不满足
+            if (right < n &&
+                ((Comparable<? super T>) c).compareTo((T) array[right]) > 0)
+                c = array[child = right];
+            // key = 17, c = 12，所以条件不满足
+            if (key.compareTo((T) c) <= 0)
+                break;
+            // 把 12 填充到根节点
+            array[k] = c;
+            // k 赋值后为 1
+            k = child;
+            // 一轮过后，我们发现，12 左边的子树和刚刚的差不多，都是缺少根节点，接下来处理就简单了
+        }
+        array[k] = key;
+    }
+  }
   ```
   </details>
   
