@@ -336,6 +336,15 @@ Object awaitFulfill(QNode s, Object e, boolean timed, long nanos) {
 ### PriorityBlockingQueue
 - 是一个带排序功能的BlockingQueue，是一个无界队列，就算创建的时候指定了队列长度（默认初始长度11），后面也会自动扩容。就是PriorityQueue的线程安全版本，线程安全也是通过ReentranLock和condition实现的，底层结构是基于数组的二叉堆，
 - 二叉堆：一颗完全二叉树，它非常适合用数组进行存储，对于数组中的元素 a[i]，其左子节点为 a[2*i+1]，其右子节点为 a[2*i + 2]，其父节点为 a[(i-1)/2]，其堆序性质为，每个节点的值都小于其左右子节点的值。二叉堆中最小的值就是根节点，但是删除根节点是比较麻烦的，因为需要调整树。
+
+#### PriorityBlockingQueue 构造方法
+- 指定比较器
+- 指定数组的初始大小
+- 用一个Collection集合进行初始化
+
+#### PriorityBlockingQueue 扩容步骤
+- 先释放队列的锁，这样就可以读写操作和扩容并发做了，提高并发量
+- 获取扩容的锁，其实就是CAS操作获取锁
   
   <details>
   <summary> 源代码</summary>
