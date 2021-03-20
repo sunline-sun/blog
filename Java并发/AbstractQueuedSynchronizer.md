@@ -1,5 +1,18 @@
 ### AQS概念
-- 同步队列
+- 用来构建锁和同步器的框架，ReentrantLock、ReentranReadWriteLock、SynchronousQueue、FutureTask都是基于AQS实现的
+
+### AQS原理
+- 核心思想就是：如果被请求的资源空闲，那么当前请求资源的线程就是工作线程，然后将资源标记为锁定状态，如果请求的资源是被锁定状态，就加入阻塞队列挂起等待唤醒。
+
+### AQS两种资源共享方式
+- 独占锁：只有一个线程能持有资源锁，ReenTrantLock就是基于独占锁实现的
+- 共享锁：多个线程可以同时执行，比如Semaphore/CountDownLatch。Semaphore、CountDownLatCh、 CyclicBarrier、ReadWriteLock都是共享锁
+
+### AQS底层用的设计模式是模板模式
+- AQS同步器的设计是基于模板模式的，自定义的同步器需要继承AQS抽象类并重写他的部分方法（获取锁这些），然后使用的时候调用AQS的方法，AQS的方法里会使用自定义同步器中重写的方法
+
+#### 模板模式
+- 模板模式是基于继承实现的，就是在不改变模板结构的前提下重写部分方法。比如起床-坐车上班-干活，只有坐车上班需要自己实现方式，其他都是统一用父类的就可以
 
 ### acquire()方法
 - 通常用作获取锁的操作，reentranLock就是通过这个方法加锁的
@@ -261,3 +274,39 @@ final boolean transferForSignal(Node node) {
 ### 中断的使用和处理
 - 中断其实只是线程的一个状态，true代表中断，false代表正常，可以通过中断的状态去做处理。像await()、sleep()等方法都抛出了InterruptedException异常，这种方法大部分是阻塞的，也就是需要被唤醒的，这时候我们可以通过中断这个线程的方式强行唤醒这个线程，然后抛出异常，结束等待。当然这个也需要我们在代码里判断中断状态，抛出异常，一般放在循环的开始处。
 - 一般并发包都会提供两种方式，一种响应中断，一种不响应中断，比如lock()、lockInterruptibly()
+
+### Semaphore(信号量)-允许多个线程同时访问
+- 构造的时候可以指定可以被多少个线程同时获取，也可以指定公平锁还是非公平锁，一般这个用来控制线程数量用的
+- 实现原理就是初始的时候会把传参的线程数赋值给state，如果实际的线程数超过了这个值，就会进入阻塞队列并挂起，至少有线程释放了才可以获取到。
+
+###  CountDownLatch （倒计时器）
+
+#### CountDownLatch实现原理
+- 构造的时候指定的count数赋值给state，当调用countDown()方法的时候，state会减1，调用await的时候，会判断state是否是0，不为0 的话就会阻塞，CountDownLatch会自旋判断state是否为0，如果等于0了就会唤醒所有等待的线程，程序才可以执行
+
+#### CountDownLatch使用场景
+- 一个线程运行前要等待其他多个线程执行完。比如启动一个服务时，需要加载所有的组件，才可以继续。
+- 需要多个线程同时执行的时候，可以给多个线程一个共享的CountDownLatch对象，初始值设置为1，每个线程都调用await方法，主线程调用countDown方法，所有线程就会一起执行
+
+#### CountDownLatch的不足
+- 一次性的使用，只有被构造的时候初始化一次，用完了就不能再次使用了
+
+### CyclicBarrier(循环栅栏)
+- 使用上和CountDownLatch类型，CountDownLatch是基于AQS的，CylicBarrier是基于ReentrantLock的，CyclicBarrier的优势在于可以重置，多次使用
+
+#### CyclicBarrier的使用场景
+- 可以用于多线程执行数据，最后合并计算结果的场景。比如计算多个Sheet页的数据汇总，可以多线程汇总每个Sheet页的，最后合并
+- 可以使多个线程达到某一个同步点，一起执行
+
+#### CyclicBarrier await方法执行逻辑
+- 获取锁
+- 把count- 1
+- 如果count = 0 了，就会唤醒所有等待线程，并重置count
+- 如果count > 0那么就挂起
+- 释放锁
+
+
+### CyclicBarrier 和 CountDownLatch 的区别
+- 对于 CountDownLatch 来说，重点是“一个线程（多个线程）等待”，而其他的 N 个线程在完成“某件事情”之后，可以终止，也可以等待。而对于 CyclicBarrier，重点是多个线程，在任意一个线程没有完成，所有的线程都必须等待。
+- CountDownLatch 是计数器，线程完成一个记录一个，只不过计数不是递增而是递减，而 CyclicBarrier 更像是一个阀门，需要所有线程都到达，阀门才能打开，然后继续执行。
+
