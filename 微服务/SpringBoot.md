@@ -35,9 +35,9 @@ if (!isEnabled(annotationMetadata)) {
 		configurations = removeDuplicates(configurations);
     //根据EnableConfiguration注解中的属性，获取不需要自动配置的类名单
 		Set<String> exclusions = getExclusions(annotationMetadata, attributes);
-    //根据exclude进行排除
+    //校验exclude的类是否在这个属性下
 		checkExcludedClasses(configurations, exclusions);
-    //exclusions也排除
+    //exclude进行排除，exclusions也排除
 		configurations.removeAll(exclusions);
     //通过读取spring.factories 中的OnBeanCondition\OnClassCondition\OnWebApplicationCondition进行过滤
 		configurations = getConfigurationClassFilter().filter(configurations);
@@ -56,7 +56,9 @@ if (!isEnabled(annotationMetadata)) {
     - 获取spring.property文件中的所有配置，把这些配置存到map里
     - 从map里获取enableAutoConfiguration下的配置类
   - 通过linkedhashset排重，把重复的配置类去重
-  - 
+  - 根据enableConfiguration注解中的exclude和exclusions属性，去掉对应的配置类
+  - 通过从spring.properties中读取到的AutoConfigurationImportFilter也就是OnClassCondition这些，对候选的配置类进行过滤
+  - 调用实现了AutoconfigurationImportListener的bean，吧候选的配置类和排除的配置类传进去做扩展
 
 ### @Conditional派生注解（Spring注解版原生的@Conditional作用）
 - 作用：必须是@Conditional指定的条件成立，才给容器中添加组件，配置配里面的所有内容才生效；
@@ -74,5 +76,15 @@ if (!isEnabled(annotationMetadata)) {
 @ConditionalOnNotWebApplication 当前不是web环境
 @ConditionalOnJndi JNDI存在指定项
 
-### 自定义starter（场景启动器）
-- 我们可以通过自定义starter加载自己需要的bean
+### spring-boot-starter作用和自定义starter（场景启动器）的作用
+- spring-boot-starter是一个配置了很多jar包的空的maven项目，他的作用是可以让开发人员不用关注需要依赖哪些库，想用某个模块的时候直接依赖这个模块的starter就可以了，starter里会把需要的所有jar包都依赖进来，比如我们需要在项目里使用redis，直接依赖spring-boot-starter-redis就可以了，这个下面会自己依赖需要的库，加载需要的bean到容器里
+- 自定义starter也是一样的目的，就是可以把独立于业务之外的模块封装成一个个的starter，需要的时候直接依赖这个starter就可以了，springboot就可以帮我们完成自动装配
+
+### 自定义starter步骤
+- 创建spring.properties配置文件，定义需要加载的配置类
+- 定义配置类，创建需要实例化的bean
+- 引入这个starter，就可以实现自动配置了
+
+### starter命名规范
+- 官方命名：spring-boot-starter-*
+- 自定义starter：test-spring-boot-starter
