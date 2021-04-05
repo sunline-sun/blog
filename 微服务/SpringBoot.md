@@ -88,3 +88,14 @@ if (!isEnabled(annotationMetadata)) {
 ### starter命名规范
 - 官方命名：spring-boot-starter-*
 - 自定义starter：test-spring-boot-starter
+
+### springBoot是怎么通过jar包就可以启动的
+- 首先依赖的spring-boot-maven-plugin包，会帮我们做两件事
+  - 生成manifest.mf文件
+    - manifest.mf中的main-class是jarlauncher，当运行的时候也就是执行这个来加载类，这个里有自定义的类加载器，用来实现加载jar中的jar包（嵌套的jar），因为默认是不支持这种的
+    - start-class是我们本地的启动类，在加载完类之后会通过反射的方式调用这个本地的启动类
+  - 把依赖的jar包也打进去了
+- 当运行jar包的时候，会先找到mainfest.mf文件里的main-class，然后通过加载BOOT-INF/classes和 BOOT-INF/lib目录下的jar文件，实现fat jar的启动
+- springboot通过扩展jarfile、jarURLconnection和URLStreamHandler，实现jar in jar 的资源的加载
+- springboot通过扩展URLClassLoader-LauncharURLClassLoader，实现了jar in jar class文件的加载
+- 类加载完后，会找到manifest.mf中的start-class，反射的方式调用这个自己定义的启动类
