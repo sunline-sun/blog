@@ -99,3 +99,5 @@ if (!isEnabled(annotationMetadata)) {
 - springboot通过扩展jarfile、jarURLconnection和URLStreamHandler，实现jar in jar 的资源的加载
 - springboot通过扩展URLClassLoader-LauncharURLClassLoader，实现了jar in jar class文件的加载
 - 类加载完后，会找到manifest.mf中的start-class，反射的方式调用这个自己定义的启动类
+
+### 
