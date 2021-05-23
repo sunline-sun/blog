@@ -1,0 +1,35 @@
+### StringIOC流程
+- 实例化defultConfigApplicationContext
+	- 包括bean的读取器，AnnotatedBeanDefinitionReader
+	- 扫描器，ClassPathBeanDefinitionScanner，只有调用scanner的时候才会执行这里
+- 实例化bean工厂DefaultListableBeanFactory
+- 创建BeanDifinition读取器AnnotatedBeanDefinitionReader
+	- 注册内置BeanPostProcecer
+	- 注册BeanDefinition（存放bean的一系列信息，比如Bean的作用域、Bean对应的class、是否懒加载等）
+- 创建Beandefinition扫描器
+- 注册配置类为BeanDefinition：AnnotatedBeanDefinitionReader
+	- 通过AnnotatedGenericBeanDefinition的构造方法，获得配置类的BeanDefinition
+	- 通过注解判断是否需要跳过
+- refresh()
+	- prepareRefresh,准备工作，保存容器的启动时间，启动标志
+	- prepareBeanFactory，准备工作，添加了两个后置处理器
+	- postProcessBeanFactory(beanFactory) 扩展用
+	- invokeBeanFactoryPostProcessors(beanFactory)
+	- registerBeanPostProcessors（beanFactory）实例化和注册beanFactory中扩展了BeanPostProcessor的bean
+	- initMessageSource（）初始化国际化资源处理器
+	- initApplicationEventMulticaster(),创建事件多播器
+	- onRefresh（） 模板模式，容器刷新的时候可以
+	- registerListeners()，注册监听器
+	- finishBeanFactoryInitialization(beanFactory)实例化所有剩余的单例
+	
+### bean的生命周期
+-  实例化Bean对象，
+- 填充属性，当做完这一步，Bean对象基本是完整的了，可以理解为Autowired注解已经解析完毕，依赖注入完成了；
+- 如果Bean实现了BeanNameAware接口，则调用setBeanName方法；
+- 如果Bean实现了BeanClassLoaderAware接口，则调用setBeanClassLoader方法；
+- 如果Bean实现了BeanFactoryAware接口，则调用setBeanFactory方法；
+- 调用BeanPostProcessor的postProcessBeforeInitialization方法；
+- 如果Bean实现了InitializingBean接口，调用afterPropertiesSet方法；
+- 如果Bean定义了init-method方法，则调用Bean的init-method方法；
+- 调用BeanPostProcessor的postProcessAfterInitialization方法；当进行到这一步，Bean已经被准备就绪了，一直停留在应用的上下文中，直到被销毁；
+- 如果应用的上下文被销毁了，如果Bean实现了DisposableBean接口，则调用destroy方法，如果Bean定义了destory-method声明了销毁方法也会被调用。
